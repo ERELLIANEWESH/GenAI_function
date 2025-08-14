@@ -6,4 +6,5 @@ azure-functions
 azure-core
 azure-search-documents
 azure-storage-blob
+flask
  
