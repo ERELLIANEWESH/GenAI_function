@@ -1,17 +1,7 @@
 {
-  "scriptFile": "__init__.py",
-  "bindings": [
-    {
-      "authLevel": "anonymous",
-      "type": "httpTrigger",
-      "direction": "in",
-      "name": "req",
-      "methods": ["get", "post"]
-    },
-    {
-      "type": "http",
-      "direction": "out",
-      "name": "$return"
-    }
-  ]
+  "IsEncrypted": true,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "CfDJ8FekYUALfAxLg+YqK5UPW4J9HRIfhwj9x5owWTj9d/BkBC0J5Lb00bPvnkqZ4Dg+Az4FadFI71AO3kn5sQrXHtvbMHlrzJnWqqJGNZeT2SL8n/GWuIYCdzFIzh8yXoe5Dw=="
+  },
+  "ConnectionStrings": {}
 }
