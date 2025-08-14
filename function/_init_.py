@@ -4,14 +4,14 @@ from azure.search.documents import SearchClient
 import openai
 
 # Azure OpenAI and Search configs
-AZURE_OPENAI_KEY = "<your-key>"
-AZURE_OPENAI_ENDPOINT = "<your-endpoint>"
+AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
+AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
 AZURE_OPENAI_API_VERSION = "turbo-2024-04-09"
 AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
 
-SEARCH_ENDPOINT = "<your-search-endpoint>"
-SEARCH_KEY = "<your-search-key>"
-SEARCH_INDEX_NAME = "<your-index>"
+SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
+SEARCH_KEY = "SEARCH_KEY = "OJYtmoCAxBgIhNIXaMOyO6izzYHHnud5swVZe7XiQnAzSeCJXa3"
+SEARCH_INDEX_NAME = "jeliv-gold-tenders-rag-indexer"
 
 def build_filter_expression(params):
     filters = []
@@ -75,4 +75,5 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         body=f'{{"question":"{question}", "answer":"{answer}", "filters":"{filter_expr}"}}',
         mimetype="application/json"
     )
+
 
