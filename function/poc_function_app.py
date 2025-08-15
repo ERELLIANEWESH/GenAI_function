@@ -8,7 +8,7 @@ import openai
 # ---------------- CONFIGURATION ----------------
 AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
 AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
-AZURE_OPENAI_API_VERSION = "2024-04-09"  # Correct format
+AZURE_OPENAI_API_VERSION = "2024-04-09"
 AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
 
 SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
@@ -32,7 +32,7 @@ search_client = SearchClient(
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 @app.function_name(name="chat_with_ai")
-@app.route(route="chat")  # e.g., POST https://<functionapp>.azurewebsites.net/api/chat
+@app.route(route="chat")  # POST https://<functionapp>.azurewebsites.net/api/chat
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Processing AI chat request...")
 
@@ -53,13 +53,48 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-    try:
-        # Step 1: Search in Azure Cognitive Search
-        search_results = search_client.search(query, top=3)
-        docs = [doc for doc in search_results]
-        context_text = "\n".join([json.dumps(doc, indent=2) for doc in docs])
+    # ---------------- BUILD FILTERS ----------------
+    params = req_body
+    filters = []
 
-        # Step 2: Call Azure OpenAI
+    if params.get("tender_number"):
+        filters.append(f"tender_number eq '{params['tender_number']}'")
+    if params.get("document_type"):
+        filters.append(f"document_type eq '{params['document_type']}'")
+    if params.get("metadata_storage_name"):
+        filters.append(f"metadata_storage_name eq '{params['metadata_storage_name']}'")
+    if params.get("metadata_storage_path"):
+        filters.append(f"metadata_storage_path eq '{params['metadata_storage_path']}'")
+    if params.get("metadata_storage_last_modified"):
+        filters.append(f"metadata_storage_last_modified eq {params['metadata_storage_last_modified']}")
+    if params.get("procuring_entity"):
+        filters.append(f"procuring_entity eq '{params['procuring_entity']}'")
+    if params.get("description"):
+        filters.append(f"description eq '{params['description']}'")
+    if params.get("closing_date"):
+        filters.append(f"closing_date eq {params['closing_date']}")
+
+    filter_expr = " and ".join(filters) if filters else None
+
+    # ---------------- SEARCH AZURE ----------------
+    try:
+        search_kwargs = {"top": 5}
+        if filter_expr:
+            search_kwargs["filter"] = filter_expr
+
+        results = search_client.search(query, **search_kwargs)
+        docs = [doc for doc in results]
+        context_text = "\n".join([json.dumps(doc, indent=2) for doc in docs])
+    except Exception as e:
+        logging.error(f"Error querying Azure Search: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({"error": f"Azure Search error: {str(e)}"}),
+            status_code=500,
+            mimetype="application/json"
+        )
+
+    # ---------------- CALL OPENAI ----------------
+    try:
         completion = openai.ChatCompletion.create(
             engine=AZURE_OPENAI_DEPLOYMENT_NAME,
             messages=[
@@ -68,19 +103,18 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             ],
             max_tokens=500
         )
-
         answer = completion.choices[0].message["content"]
-
-        return func.HttpResponse(
-            json.dumps({"query": query, "answer": answer}),
-            mimetype="application/json",
-            status_code=200
-        )
-
     except Exception as e:
-        logging.error(f"Error processing request: {str(e)}")
+        logging.error(f"Error calling OpenAI: {str(e)}")
         return func.HttpResponse(
-            json.dumps({"error": str(e)}),
-            mimetype="application/json",
-            status_code=500
+            json.dumps({"error": f"OpenAI error: {str(e)}"}),
+            status_code=500,
+            mimetype="application/json"
         )
+
+    return func.HttpResponse(
+        json.dumps({"query": query, "filters": filter_expr, "answer": answer}),
+        status_code=200,
+        mimetype="application/json"
+    )
+
