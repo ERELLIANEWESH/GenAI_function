@@ -1,67 +1,86 @@
-import openai
+import logging
+import json
+import azure.functions as func
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
-import azure.functions as func
+import openai
 
-# Configs
+# ---------------- CONFIGURATION ----------------
 AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
 AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
-AZURE_OPENAI_API_VERSION = "2024-04-09"
+AZURE_OPENAI_API_VERSION = "2024-04-09"  # Correct format
 AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
 
 SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
 SEARCH_KEY = "OJYtmoCAxBgIhNIXaMOyO6izzYHHnud5swVZe7XiQnAzSeCJXa3"
 SEARCH_INDEX_NAME = "jeliv-gold-tenders-rag-indexer"
 
-# Query Azure Cognitive Search
-def query_search(query):
-    client = SearchClient(endpoint=SEARCH_ENDPOINT,
-                          index_name=SEARCH_INDEX_NAME,
-                          credential=AzureKeyCredential(SEARCH_KEY))
-    results = client.search(query, top=5)
-    passages = []
-    for result in results:
-        passages.append(result["content"])
-    return "\n\n".join(passages)
+# ---------------- OPENAI CONFIG ----------------
+openai.api_type = "azure"
+openai.api_key = AZURE_OPENAI_KEY
+openai.api_base = AZURE_OPENAI_ENDPOINT
+openai.api_version = AZURE_OPENAI_API_VERSION
 
-# Generate answer using Azure OpenAI
-def generate_answer(user_query):
-    context = query_search(user_query)
-    prompt = f"""Answer the question based on the context below:
-    
-Context:
-{context}
+# ---------------- SEARCH CLIENT ----------------
+search_client = SearchClient(
+    endpoint=SEARCH_ENDPOINT,
+    index_name=SEARCH_INDEX_NAME,
+    credential=AzureKeyCredential(SEARCH_KEY)
+)
 
-Question: {user_query}"""
+# ---------------- AZURE FUNCTION ENTRY ----------------
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-    openai.api_type = "azure"
-    openai.api_base = AZURE_OPENAI_ENDPOINT
-    openai.api_key = AZURE_OPENAI_KEY
-    openai.api_version = AZURE_OPENAI_API_VERSION
-
-    response = openai.ChatCompletion.create(
-        engine=AZURE_OPENAI_DEPLOYMENT_NAME,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
-    )
-
-    return response["choices"][0]["message"]["content"]
-
-# Azure Function HTTP Trigger
+@app.function_name(name="chat_with_ai")
+@app.route(route="chat")  # e.g., POST https://<functionapp>.azurewebsites.net/api/chat
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        user_query = req.params.get('q')
-        if not user_query:
-            return func.HttpResponse(
-                "Please pass a 'q' parameter in the query string",
-                status_code=400
-            )
+    logging.info("Processing AI chat request...")
 
-        answer = generate_answer(user_query)
-        return func.HttpResponse(answer, status_code=200)
+    try:
+        req_body = req.get_json()
+    except ValueError:
+        return func.HttpResponse(
+            json.dumps({"error": "Invalid JSON payload."}),
+            status_code=400,
+            mimetype="application/json"
+        )
+
+    query = req_body.get("query")
+    if not query:
+        return func.HttpResponse(
+            json.dumps({"error": "Missing 'query' field."}),
+            status_code=400,
+            mimetype="application/json"
+        )
+
+    try:
+        # Step 1: Search in Azure Cognitive Search
+        search_results = search_client.search(query, top=3)
+        docs = [doc for doc in search_results]
+        context_text = "\n".join([json.dumps(doc, indent=2) for doc in docs])
+
+        # Step 2: Call Azure OpenAI
+        completion = openai.ChatCompletion.create(
+            engine=AZURE_OPENAI_DEPLOYMENT_NAME,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers using search results."},
+                {"role": "user", "content": f"Answer the following based on the context:\n\nContext: {context_text}\n\nQuestion: {query}"}
+            ],
+            max_tokens=500
+        )
+
+        answer = completion.choices[0].message["content"]
+
+        return func.HttpResponse(
+            json.dumps({"query": query, "answer": answer}),
+            mimetype="application/json",
+            status_code=200
+        )
 
     except Exception as e:
+        logging.error(f"Error processing request: {str(e)}")
         return func.HttpResponse(
-            f"Error: {str(e)}",
+            json.dumps({"error": str(e)}),
+            mimetype="application/json",
             status_code=500
         )
