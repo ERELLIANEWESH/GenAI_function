@@ -31,8 +31,8 @@ search_client = SearchClient(
 # ---------------- AZURE FUNCTION ENTRY ----------------
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-@app.function_name(name="chat_with_ai")
-@app.route(route="chat")  # POST https://<functionapp>.azurewebsites.net/api/chat
+@app.function_name(name="function")
+@app.route(route="https://jeliv-poc-fapp-dev-sn-01-ambgcdb7dkg0b7cx.southafricanorth-01.azurewebsites.net/api/function?")  # POST https://<functionapp>.azurewebsites.net/api/chat
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Processing AI chat request...")
 
@@ -117,4 +117,5 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200,
         mimetype="application/json"
     )
+
 
