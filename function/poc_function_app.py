@@ -8,7 +8,7 @@ import openai
 # ---------------- CONFIGURATION ----------------
 AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
 AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
-AZURE_OPENAI_API_VERSION = "2024-04-09"
+AZURE_OPENAI_API_VERSION = "turbo-2024-04-09"
 AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
 
 SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
@@ -54,25 +54,25 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     # ---------------- BUILD FILTERS ----------------
-    params = req_body
     filters = []
+    filter_fields = [
+        "tender_number",
+        "document_type",
+        "metadata_storage_name",
+        "metadata_storage_path",
+        "metadata_storage_last_modified",
+        "procuring_entity",
+        "description",
+        "closing_date"
+    ]
 
-    if params.get("tender_number"):
-        filters.append(f"tender_number eq '{params['tender_number']}'")
-    if params.get("document_type"):
-        filters.append(f"document_type eq '{params['document_type']}'")
-    if params.get("metadata_storage_name"):
-        filters.append(f"metadata_storage_name eq '{params['metadata_storage_name']}'")
-    if params.get("metadata_storage_path"):
-        filters.append(f"metadata_storage_path eq '{params['metadata_storage_path']}'")
-    if params.get("metadata_storage_last_modified"):
-        filters.append(f"metadata_storage_last_modified eq {params['metadata_storage_last_modified']}")
-    if params.get("procuring_entity"):
-        filters.append(f"procuring_entity eq '{params['procuring_entity']}'")
-    if params.get("description"):
-        filters.append(f"description eq '{params['description']}'")
-    if params.get("closing_date"):
-        filters.append(f"closing_date eq {params['closing_date']}")
+    for field in filter_fields:
+        if req_body.get(field):
+            value = req_body[field]
+            if field in ["metadata_storage_last_modified", "closing_date"]:
+                filters.append(f"{field} eq {value}")
+            else:
+                filters.append(f"{field} eq '{value}'")
 
     filter_expr = " and ".join(filters) if filters else None
 
