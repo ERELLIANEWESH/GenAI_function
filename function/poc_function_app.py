@@ -8,7 +8,7 @@ import openai
 # ---------------- CONFIGURATION ----------------
 AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
 AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
-AZURE_OPENAI_API_VERSION = "turbo-2024-04-09"
+AZURE_OPENAI_API_VERSION = "2024-04-09"
 AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
 
 SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
@@ -32,9 +32,9 @@ search_client = SearchClient(
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 @app.function_name(name="function")
-@app.route(route="function")  # POST https://<functionapp>.azurewebsites.net/api/chat
+@app.route(route="function")
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info("Processing AI chat request...")
+    logging.info("Processing tender search request...")
 
     try:
         req_body = req.get_json()
@@ -58,9 +58,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     filter_fields = [
         "tender_number",
         "document_type",
-        "metadata_storage_name",
-        "metadata_storage_path",
-        "metadata_storage_last_modified",
         "procuring_entity",
         "description",
         "closing_date"
@@ -69,7 +66,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     for field in filter_fields:
         if req_body.get(field):
             value = req_body[field]
-            if field in ["metadata_storage_last_modified", "closing_date"]:
+            if field in ["closing_date"]:
                 filters.append(f"{field} eq {value}")
             else:
                 filters.append(f"{field} eq '{value}'")
@@ -82,9 +79,15 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         if filter_expr:
             search_kwargs["filter"] = filter_expr
 
-        results = search_client.search(query, **search_kwargs)
-        docs = [doc for doc in results]
-        context_text = "\n".join([json.dumps(doc, indent=2) for doc in docs])
+        results = search_client.search(search_text=query, **search_kwargs)
+        tenders = []
+        for doc in results:
+            tenders.append({
+                "tender_number": doc.get("tender_number"),
+                "procuring_entity": doc.get("procuring_entity"),
+                "description": doc.get("description"),
+                "closing_date": doc.get("closing_date")
+            })
     except Exception as e:
         logging.error(f"Error querying Azure Search: {str(e)}")
         return func.HttpResponse(
@@ -93,13 +96,26 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
+    # If no tenders found
+    if not tenders:
+        return func.HttpResponse(
+            json.dumps({"query": query, "filters": filter_expr, "answer": "No tenders found matching your query."}),
+            status_code=200,
+            mimetype="application/json"
+        )
+
     # ---------------- CALL OPENAI ----------------
     try:
+        context_text = "\n".join([
+            f"Tender Number: {t['tender_number']}, Procuring Entity: {t['procuring_entity']}, Description: {t['description']}, Closing Date: {t['closing_date']}"
+            for t in tenders
+        ])
+
         completion = openai.ChatCompletion.create(
             engine=AZURE_OPENAI_DEPLOYMENT_NAME,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers using search results."},
-                {"role": "user", "content": f"Answer the following based on the context:\n\nContext: {context_text}\n\nQuestion: {query}"}
+                {"role": "system", "content": "You are a helpful assistant summarizing tender search results."},
+                {"role": "user", "content": f"Based on the following tenders, summarize the key results:\n\n{context_text}\n\nQuestion: {query}"}
             ],
             max_tokens=500
         )
@@ -112,11 +128,19 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
+    # ---------------- RETURN RESPONSE ----------------
     return func.HttpResponse(
-        json.dumps({"query": query, "filters": filter_expr, "answer": answer}),
+        json.dumps({
+            "query": query,
+            "filters": filter_expr,
+            "tenders": tenders,
+            "answer": answer
+        }, indent=2),
         status_code=200,
         mimetype="application/json"
     )
+
+
 
 
 
