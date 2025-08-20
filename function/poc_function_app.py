@@ -6,14 +6,14 @@ from azure.search.documents import SearchClient
 import openai
 
 # ---------------- CONFIGURATION ----------------
-AZURE_OPENAI_KEY = "6opq3dVom794ZZWcn1qflev786NF1o81LffwRhwWNWKHteoXKGwFJQQJ99BHACrIdLPXJ3w3AAABACOGNK8i"
-AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-oai-dev-sn.openai.azure.com/"
-AZURE_OPENAI_API_VERSION = "2024-04-09"
-AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4"
+AZURE_OPENAI_KEY = "AQt0OHQDPF2bdAqFVldWHZoqPguTOKl20QJXfKaMbfzkQFRKcR9WJQQJ99BHACrIdLPXJ3w3AAABACOGgain"
+AZURE_OPENAI_ENDPOINT = "https://jeliv-tender-openai-dev-sn.openai.azure.com/"
+AZURE_OPENAI_API_VERSION = "2024-07-18"
+AZURE_OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
 
-SEARCH_ENDPOINT = "https://jeliv-poc-ais-dev-sn.search.windows.net"
-SEARCH_KEY = "OJYtmoCAxBgIhNIXaMOyO6izzYHHnud5swVZe7XiQnAzSeCJXa3"
-SEARCH_INDEX_NAME = "jeliv-gold-tenders-rag-indexer"
+SEARCH_ENDPOINT = "https://jeliv-tender-ai-service-dev-sn.search.windows.net"
+SEARCH_KEY = "bSvwFFtTOsq6fuFa4LL2EigLwj0Qg8N7iOyFCe4u3NAzSeBVishN"
+SEARCH_INDEX_NAME = "jeliv-tenders-rag-index"
 
 # ---------------- OPENAI CONFIG ----------------
 openai.api_type = "azure"
@@ -139,6 +139,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         status_code=200,
         mimetype="application/json"
     )
+
 
 
 
